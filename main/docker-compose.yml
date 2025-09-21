@@ -60,10 +60,47 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://kc-spark-master:7077
-      - SPARK_WORKER_MEMORY=1G
-      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
     depends_on:
       - spark-master
+
+  spark-producer:
+    image: bitnami/spark:3.5
+    container_name: kc-spark-producer
+    restart: on-failure
+    networks: [ cassandra_etl_net ]
+    depends_on:
+      - kafka
+      - spark-master
+    volumes:
+      - ./spark_app:/opt/bitnami/spark/app
+      - ./data/spark_events:/tmp/spark-events
+    command: >
+      /opt/bitnami/spark/bin/spark-submit
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
+      --master spark://kc-spark-master:7077
+      --conf spark.eventLog.enabled=true
+      /opt/bitnami/spark/app/producer.py
+
+  spark-consumer:
+    image: bitnami/spark:3.5
+    container_name: kc-spark-consumer
+    restart: on-failure
+    networks: [ cassandra_etl_net ]
+    depends_on:
+      - kafka
+      - spark-master
+      - cassandra
+    volumes:
+      - ./spark_app:/opt/bitnami/spark/app
+      - ./data/spark_events:/tmp/spark-events
+    command: >
+      /opt/bitnami/spark/bin/spark-submit
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0
+      --master spark://kc-spark-master:7077
+      --conf spark.eventLog.enabled=true
+      /opt/bitnami/spark/app/consumer.py
 
   kafka:
     image: bitnami/kafka:3.7
@@ -86,6 +123,7 @@ services:
       - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_CFG_OFFSETS_TOPIC_NUM_PARTITIONS=1
     volumes:
       - ../data/kafka:/bitnami/kafka
 
@@ -142,24 +180,24 @@ services:
        sleep 60; 
        cqlsh cassandra -f /init.cql"
 
-  spark-app:
-    image: bitnami/spark:3.5
-    container_name: kc-spark-app
-    restart: on-failure
-    networks: [ cassandra_etl_net ]
-    depends_on:
-      - kafka
-      - spark-master
-    volumes:
-      - ./spark_app:/opt/bitnami/spark/app
-      - ./data/spark_events:/tmp/spark-events # 이 줄을 추가
+  # spark-app:
+  #   image: bitnami/spark:3.5
+  #   container_name: kc-spark-app
+  #   restart: on-failure
+  #   networks: [ cassandra_etl_net ]
+  #   depends_on:
+  #     - kafka
+  #     - spark-master
+  #   volumes:
+  #     - ./spark_app:/opt/bitnami/spark/app
+  #     - ./data/spark_events:/tmp/spark-events # 이 줄을 추가
 
-    command: >
-      /opt/bitnami/spark/bin/spark-submit
-      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0
-      --master spark://kc-spark-master:7077
-      --conf spark.eventLog.enabled=true
-      /opt/bitnami/spark/app/stream_processor.py
+  #   command: >
+  #     /opt/bitnami/spark/bin/spark-submit
+  #     --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0
+  #     --master spark://kc-spark-master:7077
+  #     --conf spark.eventLog.enabled=true
+  #     /opt/bitnami/spark/app/stream_processor.py
 
   grafana:
     image: grafana/grafana:latest
