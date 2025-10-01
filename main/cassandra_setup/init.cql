@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS logs_by_ip (
     returned_amount double,
     pay_method text,
     item_category text,
-    accessed_at uuid,
+    accessed_at timeuuid,
     log_date date,
     error_log text,
     PRIMARY KEY (ip, accessed_at)
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS logs_by_day (
     returned_amount double,
     pay_method text,
     item_category text,
-    accessed_at uuid,
+    accessed_at timeuuid,
     log_date date,
     error_log text,
     PRIMARY KEY (log_date, accessed_at)
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS logs_by_country (
     returned_amount double,
     pay_method text,
     item_category text,
-    accessed_at uuid,
+    accessed_at timeuuid,
     log_date date,
     error_log text,
     PRIMARY KEY (country, accessed_at)
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS logs_by_category (
     returned_amount double,
     pay_method text,
     item_category text,
-    accessed_at uuid,
+    accessed_at timeuuid,
     log_date date,
     error_log text,
     PRIMARY KEY (item_category, accessed_at)

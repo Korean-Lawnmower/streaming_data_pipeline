@@ -75,7 +75,7 @@ services:
       - spark-master
     volumes:
       - ./spark_app:/opt/bitnami/spark/app
-      - ./data/spark_events:/tmp/spark-events
+      - ../data/spark_events:/tmp/spark-events
     command: >
       /opt/bitnami/spark/bin/spark-submit
       --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
@@ -94,7 +94,7 @@ services:
       - cassandra
     volumes:
       - ./spark_app:/opt/bitnami/spark/app
-      - ./data/spark_events:/tmp/spark-events
+      - ../data/spark_events:/tmp/spark-events
     command: >
       /opt/bitnami/spark/bin/spark-submit
       --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,com.datastax.spark:spark-cassandra-connector_2.12:3.5.0
@@ -177,7 +177,7 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command: >
       "echo 'Waiting for Cassandra...'; 
-       sleep 60; 
+       sleep 10; 
        cqlsh cassandra -f /init.cql"
 
   # spark-app:

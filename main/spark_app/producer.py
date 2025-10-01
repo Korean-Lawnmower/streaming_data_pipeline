@@ -1,6 +1,9 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, to_json, struct, to_date, to_timestamp, lit, when, expr
 from pyspark.sql.types import StructType, StructField, StringType
+import uuid, random
+from datetime import datetime, timezone
+from pyspark.sql.functions import udf
 
 # Kafka schema
 SCHEMA = StructType([
@@ -21,6 +24,60 @@ SCHEMA = StructType([
     StructField("pay_method", StringType(), True),
     StructField("item_category", StringType(), True),
 ])
+
+UUID_EPOCH_START = datetime(1582, 10, 15, tzinfo=timezone.utc)
+
+def to_timeuuid_from_date(ts_str: str) -> str:
+    if ts_str is None:
+        print("[DEBUG] accessed_date is None")
+        return None
+    try:
+        print(f"[DEBUG] Raw accessed_date string: {ts_str}")
+
+        # Try parsing with microseconds first (your data format)
+        try:
+            dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S.%f")
+            print(f"[DEBUG] Parsed datetime object: {dt}")
+        except ValueError as e:
+            print(f"[DEBUG] Failed microsecond parse: {e}")
+            try:
+                # Fallback to seconds only
+                dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                print(f"[DEBUG] Parsed datetime (seconds only): {dt}")
+            except ValueError as e2:
+                print(f"[DEBUG] Failed second parse too: {e2}")
+                return None
+
+        # Make datetime timezone-aware (UTC)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        intervals = int((dt - UUID_EPOCH_START).total_seconds() * 1e7)
+        print(f"[DEBUG] Intervals since UUID epoch: {intervals}")
+
+        time_low = intervals & 0xffffffff
+        time_mid = (intervals >> 32) & 0xffff
+        time_hi_and_version = ((intervals >> 48) & 0x0fff) | (1 << 12)
+
+        clock_seq = random.getrandbits(14)
+        clock_seq_hi = (clock_seq >> 8) | 0x80
+        clock_seq_low = clock_seq & 0xff
+        node = random.getrandbits(48)
+
+        new_uuid = str(uuid.UUID(fields=(
+            time_low, time_mid, time_hi_and_version,
+            clock_seq_hi, clock_seq_low, node
+        )))
+
+        print(f"[DEBUG] Generated UUID: {new_uuid}")
+        return new_uuid
+
+    except Exception as e:
+        print(f"[ERROR] Unexpected exception in to_timeuuid_from_date: {e}")
+        return None
+
+
+timeuuid_from_date_udf = udf(to_timeuuid_from_date, StringType())
 
 def read_data(spark, kafka_servers, topic):
     return (
@@ -43,17 +100,20 @@ def transform_data(df):
             .withColumnRenamed("accessed_Ffom", "accessed_from")
     )
 
-    preprocessed_df = preprocessed_df.withColumn("accessed_at", expr("uuid()"))
+    # Generate UUID from the original string timestamp
+    preprocessed_df = preprocessed_df.withColumn("accessed_at", timeuuid_from_date_udf(col("accessed_date").cast("string")))
 
+    # Convert timestamp using correct format for microseconds
+    # Use SSSSSS for microseconds (6 digits) instead of SSS for milliseconds (3 digits)
     preprocessed_df = (
         preprocessed_df
-            .withColumn("log_date", to_date(to_timestamp(col("accessed_date"), "yyyy-MM-dd HH:mm:ss.SSS")))
+            .withColumn("log_date", to_date(to_timestamp(col("accessed_date"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
             .withColumn("sales", col("sales").cast("double"))
             .withColumn("returned_amount", col("returned_amount").cast("double"))
             .withColumn("duration_secs", col("duration_secs").cast("int"))
             .withColumn("age", col("age").cast("int"))
             .withColumn("bytes", col("bytes").cast("bigint"))
-            .withColumn("accessed_date", to_timestamp(col("accessed_date"), "yyyy-MM-dd HH:mm:ss.SSS"))
+            .withColumn("accessed_date", to_timestamp(col("accessed_date"), "yyyy-MM-dd HH:mm:ss.SSSSSS"))
     )
 
     preprocessed_df = preprocessed_df.withColumn(

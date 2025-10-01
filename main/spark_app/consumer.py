@@ -1,14 +1,14 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, to_timestamp, to_date, expr
+from pyspark.sql.functions import from_json, col, to_timestamp, to_date
 from pyspark.sql.types import (
     StructType, StructField, StringType, IntegerType,
     DoubleType, LongType
 )
 import sys
 
-# === Schema aligned with Cassandra ===
+# === Schema aligned with Cassandra (accessed_at already comes as UUID string) ===
 SCHEMA = StructType([
-    StructField("accessed_date", StringType(), True),     # will cast → Timestamp
+    StructField("accessed_date", StringType(), True),     # comes as timestamp string
     StructField("duration_secs", StringType(), True),     # will cast → Integer
     StructField("network_protocol", StringType(), True),
     StructField("ip", StringType(), True),
@@ -24,8 +24,8 @@ SCHEMA = StructType([
     StructField("returned_amount", StringType(), True),   # will cast → Double
     StructField("pay_method", StringType(), True),
     StructField("item_category", StringType(), True),
-    StructField("accessed_at", StringType(), True),       # will cast → UUID
-    StructField("log_date", StringType(), True),          # will cast → Date
+    StructField("accessed_at", StringType(), True),       # UUID string from validator
+    StructField("log_date", StringType(), True),          # date string from validator
     StructField("error_log", StringType(), True),
 ])
 
@@ -71,7 +71,7 @@ def main():
               .select("data.*")
     )
 
-    # === Cast types to match Cassandra ===
+    # === Cast types to match Cassandra (no UUID regeneration needed) ===
     parsed_df = (
         parsed_df
             .withColumn("sales", col("sales").cast(DoubleType()))
@@ -81,9 +81,9 @@ def main():
             .withColumn("bytes", col("bytes").cast(LongType()))
             .withColumn("accessed_date", to_timestamp(col("accessed_date")))
             .withColumn("log_date", to_date(col("log_date")))
-            .withColumn("accessed_at", expr("uuid()"))  # overwrite with fresh UUID
+            # accessed_at is already a UUID string from the validator
     )
-
+    
     print("📝 Writing stream into Cassandra tables...", flush=True)
 
     # logs_by_ip
