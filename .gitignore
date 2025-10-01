@@ -4,3 +4,4 @@ data/hdfs/
 data/kafka/
 data/grafana_data
 data/grafana_provisioning
+data/spark_events
